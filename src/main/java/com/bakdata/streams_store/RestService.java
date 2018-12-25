@@ -23,6 +23,7 @@ import javax.ws.rs.core.Context;
 import javax.ws.rs.core.GenericType;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.UriInfo;
+import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
@@ -100,13 +101,7 @@ public class RestService {
                 .get(responseType);
     }
 
-    @AllArgsConstructor @NoArgsConstructor
-    @Getter @Setter
-    public class ProcessorMetadata {
-        private String host;
-        private int port;
-        private List<Integer> topicPartitions;
-    }
+
 
     @GET()
     @Path("/processors")

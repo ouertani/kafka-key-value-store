@@ -8,11 +8,23 @@ Additionally, a Dockerfile and a Kubernetes deployment specification demonstrate
 
 ## Quick Start
 
-Compile the project using Maven: 
+Compile the project using Maven:
 ```
 mvn package
 ```
 
+Create a topic one partition:
+```
+bin/kafka-topics.sh --create --zookeeper localhost:2181 --replication-factor 1 --partitions 1 --topic  messages
+```
+
+Send message to topic:
+```
+bin/kafka-console-producer.sh --broker-list localhost:9092 --topic messages --property "parse.key=true" --property "key.separator=#"
+key1#{ "name":"Slim", "age":38 }
+key2#{ "name":"Chams", "age":28 }
+key1#{ "name":"Ouertani", "age":39 }
+```
 Start one or more instances of the Kafka Streams application:
 
 ```

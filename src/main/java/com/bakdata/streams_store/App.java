@@ -11,14 +11,30 @@ import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.Materialized;
+import org.apache.kafka.streams.state.HostInfo;
 import org.apache.kafka.streams.state.KeyValueBytesStoreSupplier;
 import org.apache.kafka.streams.state.Stores;
 
+import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.List;
 import java.util.Properties;
+import javax.websocket.server.ServerContainer;
+import javax.ws.rs.client.Client;
+import javax.ws.rs.client.ClientBuilder;
+import javax.ws.rs.core.GenericType;
+import javax.ws.rs.core.MediaType;
+
+import org.eclipse.jetty.server.Server;
+import org.eclipse.jetty.server.ServerConnector;
+import org.eclipse.jetty.servlet.ServletContextHandler;
+import org.eclipse.jetty.servlet.ServletHolder;
+import org.eclipse.jetty.websocket.api.Session;
+import org.eclipse.jetty.websocket.api.WebSocketAdapter;
+import org.eclipse.jetty.websocket.jsr356.server.deploy.WebSocketServerContainerInitializer;
+import org.glassfish.jersey.jackson.JacksonFeature;
 
 import static net.sourceforge.argparse4j.impl.Arguments.store;
 
@@ -32,6 +48,7 @@ public class App {
         String topicName = null;
         String hostName = null;
         Integer port = null;
+        Integer wssPort = null;
         String storeName = "key-value-store";
 
         try {
@@ -40,6 +57,7 @@ public class App {
             topicName = res.getString("topic");
             hostName = res.getString("hostname");
             port = res.getInt("port");
+            wssPort = res.getInt("wssPort");
             String applicationId = res.getString("applicationId");
             List<String> streamsProps = res.getList("streamsConfig");
             String streamsConfig = res.getString("streamsConfigFile");
@@ -90,17 +108,24 @@ public class App {
         final Topology topology = builder.build();
         final KafkaStreams streams = new KafkaStreams(topology, props);
 
-        final RestService restService = new RestService(streams, storeName, hostName, port);
-        restService.start();
+        //final RestService restService = new RestService(streams, storeName, hostName, port);
+        //restService.start();
+        //final MyWebSocketHandler wssService = new MyWebSocketHandler();
+        //wssService.startServer();
+        //startWSS();
 
+        streams.start();
+        Config.init(args,streams);
+        startWSS2();
         Runtime.getRuntime().addShutdownHook(new Thread(() -> streams.close()));
         Runtime.getRuntime().addShutdownHook(new Thread(() -> {
             try {
-                restService.stop();
+               // restService.stop();
+                //wssService.stopServer();
             } catch (Exception e) {}
         }));
 
-        streams.start();
+
     }
 
     private static ArgumentParser argParser() {
@@ -158,6 +183,76 @@ public class App {
                 .setDefault(8080)
                 .help("The TCP Port for the HTTP REST Service");
 
+        parser.addArgument("--wssPort")
+                .action(store())
+                .required(false)
+                .type(Integer.class)
+                .metavar("WSSPORT")
+                .setDefault(9999)
+                .help("The TCP WssPort for the HTTP WebSocket Service");
+
         return parser;
     }
+
+
+    public static void startWSS()
+    {
+        Server server = new Server();
+        ServerConnector connector = new ServerConnector(server);
+        connector.setPort(8888);
+        server.addConnector(connector);
+
+        // Setup the basic application "context" for this application at "/"
+        // This is also known as the handler tree (in jetty speak)
+        ServletContextHandler context = new ServletContextHandler(ServletContextHandler.SESSIONS);
+        context.setContextPath("/");
+        server.setHandler(context);
+
+        try
+        {
+            // Initialize javax.websocket layer
+            ServerContainer wscontainer = WebSocketServerContainerInitializer.configureContext(context);
+
+            // Add WebSocket endpoint to javax.websocket layer
+            wscontainer.addEndpoint(EventSocket.class);
+
+            server.start();
+            server.dump(System.err);
+            server.join();
+        }
+        catch (Throwable t)
+        {
+            t.printStackTrace(System.err);
+        }
+    }
+
+    public static void startWSS2() {
+        Server server = new Server();
+        ServerConnector connector = new ServerConnector(server);
+        connector.setPort(8080);
+        server.addConnector(connector);
+
+        // Setup the basic application "context" for this application at "/"
+        // This is also known as the handler tree (in jetty speak)
+        ServletContextHandler context = new ServletContextHandler(ServletContextHandler.SESSIONS);
+        context.setContextPath("/");
+        server.setHandler(context);
+
+        // Add a websocket to a specific path spec
+        ServletHolder holderEvents = new ServletHolder("ws-events", EventServlet.class);
+        context.addServlet(holderEvents, "/events/*");
+
+        try
+        {
+            server.start();
+            server.dump(System.err);
+            server.join();
+        }
+        catch (Throwable t)
+        {
+            t.printStackTrace(System.err);
+        }
+    }
+
+
 }
